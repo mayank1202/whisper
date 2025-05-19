@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import tqdm
 
-from .audio import (
+from audio import (
     FRAMES_PER_SECOND,
     HOP_LENGTH,
     N_FRAMES,
@@ -17,10 +17,10 @@ from .audio import (
     log_mel_spectrogram,
     pad_or_trim,
 )
-from .decoding import DecodingOptions, DecodingResult
-from .timing import add_word_timestamps
-from .tokenizer import LANGUAGES, TO_LANGUAGE_CODE, get_tokenizer
-from .utils import (
+from decoding import DecodingOptions, DecodingResult
+from timing import add_word_timestamps
+from tokenizer import LANGUAGES, TO_LANGUAGE_CODE, get_tokenizer
+from utils import (
     exact_div,
     format_timestamp,
     get_end,
@@ -32,7 +32,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from .model import Whisper
+    from model import Whisper
 
 
 def transcribe(
@@ -515,7 +515,7 @@ def transcribe(
 
 
 def cli():
-    from . import available_models
+    from __init__ import available_models
 
     def valid_model_name(name):
         if name in available_models() or os.path.exists(name):
@@ -590,7 +590,7 @@ def cli():
     if (threads := args.pop("threads")) > 0:
         torch.set_num_threads(threads)
 
-    from . import load_model
+    from __init__ import load_model
 
     model = load_model(model_name, device=device, download_root=model_dir)
 

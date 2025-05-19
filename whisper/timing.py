@@ -9,11 +9,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .audio import HOP_LENGTH, SAMPLE_RATE, TOKENS_PER_SECOND
-from .tokenizer import Tokenizer
+from audio import HOP_LENGTH, SAMPLE_RATE, TOKENS_PER_SECOND
+from tokenizer import Tokenizer
 
 if TYPE_CHECKING:
-    from .model import Whisper
+    from model import Whisper
 
 
 def median_filter(x: torch.Tensor, filter_width: int):
@@ -35,7 +35,7 @@ def median_filter(x: torch.Tensor, filter_width: int):
     x = F.pad(x, (filter_width // 2, filter_width // 2, 0, 0), mode="reflect")
     if x.is_cuda:
         try:
-            from .triton_ops import median_filter_cuda
+            from triton_ops import median_filter_cuda
 
             result = median_filter_cuda(x, filter_width)
         except (RuntimeError, subprocess.CalledProcessError):
@@ -106,7 +106,7 @@ def dtw_cpu(x: np.ndarray):
 
 
 def dtw_cuda(x, BLOCK_SIZE=1024):
-    from .triton_ops import dtw_kernel
+    from triton_ops import dtw_kernel
 
     M, N = x.shape
     assert M < BLOCK_SIZE, f"M should be smaller than {BLOCK_SIZE=}"
@@ -191,7 +191,7 @@ def find_alignment(
         for i, block in enumerate(model.decoder.blocks)
     ]
 
-    from .model import disable_sdpa
+    from model import disable_sdpa
 
     with torch.no_grad(), disable_sdpa():
         logits = model(mel.unsqueeze(0), tokens.unsqueeze(0))[0]
