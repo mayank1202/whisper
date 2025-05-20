@@ -30,3 +30,4 @@ whisper/decoded_audio_spanish_19demarzo_0007.wav.txt
 whisper/decoded_audio_spanish_19demarzo_0007.wav.vtt
 *.bak
 *.bak
+/whisper

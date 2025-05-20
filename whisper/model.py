@@ -54,10 +54,10 @@ class Conv1d(nn.Conv1d):
     def _conv_forward(
         self, x: Tensor, weight: Tensor, bias: Optional[Tensor]
     ) -> Tensor:
+        npu_conv1d(x,self,weight,bias)
         return super()._conv_forward(
             x, weight.to(x.dtype), None if bias is None else bias.to(x.dtype)
         )
-
 
 def sinusoids(length, channels, max_timescale=10000):
     """Returns sinusoids for positional embedding"""
@@ -66,7 +66,6 @@ def sinusoids(length, channels, max_timescale=10000):
     inv_timescales = torch.exp(-log_timescale_increment * torch.arange(channels // 2))
     scaled_time = torch.arange(length)[:, np.newaxis] * inv_timescales[np.newaxis, :]
     return torch.cat([torch.sin(scaled_time), torch.cos(scaled_time)], dim=1)
-
 
 @contextmanager
 def disable_sdpa():
@@ -119,7 +118,7 @@ class MultiHeadAttention(nn.Module):
         q = q.view(*q.shape[:2], self.n_head, -1).permute(0, 2, 1, 3)
         k = k.view(*k.shape[:2], self.n_head, -1).permute(0, 2, 1, 3)
         v = v.view(*v.shape[:2], self.n_head, -1).permute(0, 2, 1, 3)
-
+        
         if SDPA_AVAILABLE and MultiHeadAttention.use_sdpa:
             a = scaled_dot_product_attention(
                 q, k, v, is_causal=mask is not None and n_ctx > 1
@@ -190,7 +189,7 @@ class AudioEncoder(nn.Module):
         x : torch.Tensor, shape = (batch_size, n_mels, n_ctx)
             the mel spectrogram of the audio
         """
-        x = F.gelu(self.conv1(x))
+        x = F.gelu(self.conv1(x)) #Replacing gelu with relu has shown to be catatrophic in tiny model. turbo model seems to be resilient even for hindi.
         x = F.gelu(self.conv2(x))
         x = x.permute(0, 2, 1)
 
