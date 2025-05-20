@@ -9,3 +9,24 @@ thumbs.db
 .DS_Store
 .idea
 
+whisper/audio.py.bak
+whisper/decoded_audio_hindi10013.mp3.json
+whisper/decoded_audio_hindi10013.mp3.npy
+whisper/decoded_audio_hindi10013.mp3.srt
+whisper/decoded_audio_hindi10013.mp3.tsv
+whisper/decoded_audio_hindi10013.mp3.txt
+whisper/decoded_audio_hindi10013.mp3.vtt
+whisper/decoded_audio_jfk.flac.json
+whisper/decoded_audio_jfk.flac.npy
+whisper/decoded_audio_jfk.flac.srt
+whisper/decoded_audio_jfk.flac.tsv
+whisper/decoded_audio_jfk.flac.txt
+whisper/decoded_audio_jfk.flac.vtt
+whisper/decoded_audio_spanish_19demarzo_0007.wav.json
+whisper/decoded_audio_spanish_19demarzo_0007.wav.npy
+whisper/decoded_audio_spanish_19demarzo_0007.wav.srt
+whisper/decoded_audio_spanish_19demarzo_0007.wav.tsv
+whisper/decoded_audio_spanish_19demarzo_0007.wav.txt
+whisper/decoded_audio_spanish_19demarzo_0007.wav.vtt
+*.bak
+*.bak

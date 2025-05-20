@@ -42,8 +42,8 @@ def load_audio(file: str, sr: int = SAMPLE_RATE):
     decoded_buffer = 0
 
     if(file.startswith('decoded_')):
-        print('Loading a pre-decoded audio file')
-        decoded_buffer = np.load(file)
+        print('Loading a pre-decoded audio file ', file)
+        out = np.load(file)
     else:
         # This launches a subprocess to decode audio while down-mixing
         # and resampling as necessary.  Requires the ffmpeg CLI in PATH.
@@ -62,12 +62,20 @@ def load_audio(file: str, sr: int = SAMPLE_RATE):
         ]
         # fmt: on
         try:
+	
             out = run(cmd, capture_output=True, check=True).stdout
+            decoded_audio_filename = 'decoded_audio_' + file
+            print('saving decoded audio as ', decoded_audio_filename)
+            np.save(decoded_audio_filename,out)
         except CalledProcessError as e:
             raise RuntimeError(f"Failed to load audio: {e.stderr.decode()}") from e
-        decoded_buffer = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
-        decoded_filename = 'decoded_audio_'+file
-        np.save(decoded_filename, decoded_buffer)
+
+    #decoded_buffer = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+
+    #Try 8-bit quantizaton before converting to float. It actually works
+    decoded_buffer = np.frombuffer(out, np.int16) 
+    decoded_buffer = (decoded_buffer + 127) >> 8 #quantize to 8-bits
+    decoded_buffer = decoded_buffer.flatten().astype(np.float32) / 32768.0
 
     return decoded_buffer
 
