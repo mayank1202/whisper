@@ -70,12 +70,14 @@ def load_audio(file: str, sr: int = SAMPLE_RATE):
         except CalledProcessError as e:
             raise RuntimeError(f"Failed to load audio: {e.stderr.decode()}") from e
 
-    #decoded_buffer = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+    decoded_buffer = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
 
+    '''
     #Try 8-bit quantizaton before converting to float. It actually works
     decoded_buffer = np.frombuffer(out, np.int16) 
     decoded_buffer = (decoded_buffer + 127) >> 8 #quantize to 8-bits
     decoded_buffer = decoded_buffer.flatten().astype(np.float32) / 32768.0
+    '''
 
     return decoded_buffer
 

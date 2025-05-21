@@ -34,6 +34,63 @@ from utils import (
 if TYPE_CHECKING:
     from model import Whisper
 
+def decode_with_fallback(segment, model, decode_options, compression_ratio_threshold, logprob_threshold, no_speech_threshold):
+    #segment: torch.Tensor) -> DecodingResult:
+    temperatures = [0.0]
+    decode_result = None
+
+    for t in temperatures:
+        kwargs = {**decode_options}
+        if t > 0:
+            # disable beam_size and patience when t > 0
+            kwargs.pop("beam_size", None)
+            kwargs.pop("patience", None)
+        else:
+            # disable best_of when t == 0
+            kwargs.pop("best_of", None)
+
+        options = DecodingOptions(**kwargs, temperature=t)
+        decode_result = model.decode(segment, options)
+
+        needs_fallback = False
+        if (
+            compression_ratio_threshold is not None
+            and decode_result.compression_ratio > compression_ratio_threshold
+        ):
+            needs_fallback = True  # too repetitive
+        if (
+            logprob_threshold is not None
+            and decode_result.avg_logprob < logprob_threshold
+        ):
+            needs_fallback = True  # average log probability is too low
+        if (
+            no_speech_threshold is not None
+            and decode_result.no_speech_prob > no_speech_threshold
+            and logprob_threshold is not None
+            and decode_result.avg_logprob < logprob_threshold
+        ):
+            needs_fallback = False  # silence
+        if not needs_fallback:
+            break
+
+    return decode_result
+
+def new_segment(seek, start, end, tokenizer, tokens, result):
+    tokens = tokens.tolist()
+    num_tokens = len(tokens)
+    text_tokens = [token for token in tokens if token < tokenizer.eot]
+    return {
+        "seek": seek,
+        "start": start,
+        "end": end,
+        "text": tokenizer.decode(text_tokens),
+        "tokens": tokens,
+        "temperature": result.temperature,
+        "avg_logprob": result.avg_logprob,
+        "compression_ratio": result.compression_ratio,
+        "no_speech_prob": result.no_speech_prob,
+    }, num_tokens
+
 
 def transcribe(
     model: "Whisper",
@@ -140,6 +197,14 @@ def transcribe(
     content_frames = mel.shape[-1] - N_FRAMES
     content_duration = float(content_frames * HOP_LENGTH / SAMPLE_RATE)
 
+
+    print("***************Transcribe start*****************")
+    print("Model Parameters = ", model.num_params)
+    print('content_duration = ', content_duration)
+    #model.perf_kpis.disp()
+
+    num_tokens = 0
+
     if decode_options.get("language", None) is None:
         if not model.is_multilingual:
             decode_options["language"] = "en"
@@ -165,6 +230,10 @@ def transcribe(
         task=task,
     )
 
+    #print("***************After detect_language*****************")
+    #model.perf_kpis.disp()
+
+
     if isinstance(clip_timestamps, str):
         clip_timestamps = [
             float(ts) for ts in (clip_timestamps.split(",") if clip_timestamps else [])
@@ -180,48 +249,6 @@ def transcribe(
 
     if word_timestamps and task == "translate":
         warnings.warn("Word-level timestamps on translations may not be reliable.")
-
-    def decode_with_fallback(segment: torch.Tensor) -> DecodingResult:
-        temperatures = (
-            [temperature] if isinstance(temperature, (int, float)) else temperature
-        )
-        decode_result = None
-
-        for t in temperatures:
-            kwargs = {**decode_options}
-            if t > 0:
-                # disable beam_size and patience when t > 0
-                kwargs.pop("beam_size", None)
-                kwargs.pop("patience", None)
-            else:
-                # disable best_of when t == 0
-                kwargs.pop("best_of", None)
-
-            options = DecodingOptions(**kwargs, temperature=t)
-            decode_result = model.decode(segment, options)
-
-            needs_fallback = False
-            if (
-                compression_ratio_threshold is not None
-                and decode_result.compression_ratio > compression_ratio_threshold
-            ):
-                needs_fallback = True  # too repetitive
-            if (
-                logprob_threshold is not None
-                and decode_result.avg_logprob < logprob_threshold
-            ):
-                needs_fallback = True  # average log probability is too low
-            if (
-                no_speech_threshold is not None
-                and decode_result.no_speech_prob > no_speech_threshold
-                and logprob_threshold is not None
-                and decode_result.avg_logprob < logprob_threshold
-            ):
-                needs_fallback = False  # silence
-            if not needs_fallback:
-                break
-
-        return decode_result
 
     clip_idx = 0
     seek = seek_clips[clip_idx][0]
@@ -242,23 +269,6 @@ def transcribe(
         remaining_prompt_length -= len(initial_prompt_tokens)
     else:
         initial_prompt_tokens = []
-
-    def new_segment(
-        *, start: float, end: float, tokens: torch.Tensor, result: DecodingResult
-    ):
-        tokens = tokens.tolist()
-        text_tokens = [token for token in tokens if token < tokenizer.eot]
-        return {
-            "seek": seek,
-            "start": start,
-            "end": end,
-            "text": tokenizer.decode(text_tokens),
-            "tokens": tokens,
-            "temperature": result.temperature,
-            "avg_logprob": result.avg_logprob,
-            "compression_ratio": result.compression_ratio,
-            "no_speech_prob": result.no_speech_prob,
-        }
 
     # show the progress bar when verbose is False (if True, transcribed text will be printed)
     with tqdm.tqdm(
@@ -292,7 +302,7 @@ def transcribe(
             else:
                 decode_options["prompt"] = all_tokens[prompt_reset_since:]
 
-            result: DecodingResult = decode_with_fallback(mel_segment)
+            result: DecodingResult = decode_with_fallback(mel_segment, model, decode_options, compression_ratio_threshold, logprob_threshold, no_speech_threshold)
             tokens = torch.tensor(result.tokens)
 
             if no_speech_threshold is not None:
@@ -356,14 +366,16 @@ def transcribe(
                     end_timestamp_pos = (
                         sliced_tokens[-1].item() - tokenizer.timestamp_begin
                     )
-                    current_segments.append(
-                        new_segment(
+                    new_seg, token_count = new_segment(
+                            seek=seek,
                             start=time_offset + start_timestamp_pos * time_precision,
                             end=time_offset + end_timestamp_pos * time_precision,
+                            tokenizer=tokenizer,
                             tokens=sliced_tokens,
                             result=result,
                         )
-                    )
+                    current_segments.append(new_seg)
+                    num_tokens += token_count
                     last_slice = current_slice
 
                 if single_timestamp_ending:
@@ -388,15 +400,17 @@ def transcribe(
                     )
                     duration = last_timestamp_pos * time_precision
 
-                current_segments.append(
-                    new_segment(
-                        start=time_offset,
-                        end=time_offset + duration,
-                        tokens=tokens,
-                        result=result,
-                    )
-                )
+                new_seg, token_count = new_segment(
+                    seek=seek,
+                    start=time_offset,
+                    end=time_offset + duration,
+                    tokenizer=tokenizer,
+                    tokens=tokens,
+                    result=result)
+
+                current_segments.append(new_seg)
                 seek += segment_size
+                num_tokens += token_count
 
             if word_timestamps:
                 add_word_timestamps(
@@ -506,6 +520,15 @@ def transcribe(
 
             # update progress bar
             pbar.update(min(content_frames, seek) - previous_seek)
+
+    print("***************End of transcribe*****************")
+    print('Token Count = ', num_tokens)
+    
+    model.perf_kpis.add(model.encoder.perf_kpis)
+    model.perf_kpis.add(model.decoder.perf_kpis)
+    
+    model.perf_kpis.disp()
+    print("***************Tokens/Second = ", ((10**6)*num_tokens)/model.perf_kpis.execution_time_us)
 
     return dict(
         text=tokenizer.decode(all_tokens[len(initial_prompt_tokens) :]),
