@@ -134,7 +134,10 @@ class MultiHeadAttention(nn.Module):
         wv, qk, sdpa_perf_kpis = self.qkv_attention(q, k, v, mask)
         self.perf_kpis.add(sdpa_perf_kpis)
 
-        return self.out(wv), qk
+        out_ = self.out(wv)
+        self.perf_kpis.add(self.out.perf_kpis)
+
+        return out_, qk
 
     def qkv_attention(
         self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None
@@ -200,7 +203,6 @@ class ResidualAttentionBlock(nn.Module):
 
         if(cross_attention):
             self.num_params += self.cross_attn.num_params
-
 
         n_mlp = n_state * 4
         self.mlp = nn.Sequential(
